@@ -6,6 +6,7 @@ class Workout {
   //fields
   date = new Date();
   id = (Date.now() + '').slice(-10);
+  clicks = 0;
 
   constructor(coords, distance, duration) {
     this.coords = coords; // [lat, lng]
@@ -20,6 +21,9 @@ class Workout {
     this.description = `${this.type[0].toUpperCase()}${this.type.slice(1)} on ${
       months[this.date.getMonth()]
     } ${this.date.getDate()}`;
+  }
+  click() {
+    this.clicks++;
   }
 }
 //constructor mthod
@@ -71,15 +75,21 @@ const inputElevation = document.querySelector('.form__input--elevation');
 
 class App {
   #map;
+  #mapZoomLevel = 13;
   #mapEvent;
   #workouts = [];
 
   constructor() {
+    //get users position
     this._getPosition();
+
+    //get data from local storage
+    this._getLocalStorage();
 
     //eventlisteners
     form.addEventListener('submit', this._newWorkout.bind(this));
     inputType.addEventListener('change', this._toggleElevationField);
+    containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
   }
   //
   _getPosition() {
@@ -99,7 +109,7 @@ class App {
 
     const coords = [latitude, longitude];
 
-    this.#map = L.map('map').setView(coords, 13);
+    this.#map = L.map('map').setView(coords, this.#mapZoomLevel);
 
     L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
       attribution:
@@ -108,6 +118,10 @@ class App {
 
     //handling clicks on the map
     this.#map.on('click', this._showForm.bind(this));
+
+    this.#workouts.forEach(work => {
+      this._renderWorkoutMarker(work);
+    });
   }
   //
   _showForm(mapE) {
@@ -181,7 +195,6 @@ class App {
     }
     //add new object to the workout arrray
     this.#workouts.push(workout);
-    console.log(workout);
 
     //render workout on map as marker
     this._renderWorkoutMarker(workout);
@@ -191,6 +204,9 @@ class App {
 
     // hide the form + clear input fields
     this._hideForm();
+
+    //set local storage to all workouts
+    this._setLocalStorage();
   }
 
   _renderWorkoutMarker(workout) {
@@ -202,12 +218,12 @@ class App {
           maxWidth: 250,
           minWidth: 100,
           autoClose: false,
+          closeOnClick: false,
           className: `${workout.type}-popup`,
         })
       )
       .setPopupContent(
-        `${workout.type === 'running' ? '🏃‍♂️' : '🚴‍♀️'} ${workout.description}
-      `
+        `${workout.type === 'running' ? '🏃‍♂️' : '🚴‍♀️'} ${workout.description}`
       )
       .openPopup();
   }
@@ -228,7 +244,7 @@ class App {
           <span class="workout__unit">min</span>
         </div>
     `;
-    if (workout.type === 'runnung')
+    if (workout.type === 'running')
       html += `
         <div class="workout__details">
           <span class="workout__icon">⚡️</span>
@@ -242,7 +258,7 @@ class App {
        </div>
     </li>`;
 
-    if (workout === 'cycling')
+    if (workout.type === 'cycling')
       html += `
       <div class="workout__details">
         <span class="workout__icon">⚡️</span>
@@ -258,6 +274,44 @@ class App {
 
     //DOM manipulation
     form.insertAdjacentHTML('afterend', html);
+  }
+  //move marker on click
+  _moveToPopup(e) {
+    const workoutEl = e.target.closest('.workout');
+
+    if (!workoutEl) return;
+    //get workout data out of the workout array
+    const workout = this.#workouts.find(
+      work => work.id === workoutEl.dataset.id
+    );
+
+    this.#map.setView(workout.coords, this.#mapZoomLevel, {
+      animate: true,
+      pan: {
+        duration: 1,
+      },
+    });
+    //using the public interface
+    // workout.click();
+  }
+
+  _setLocalStorage() {
+    localStorage.setItem('workouts', JSON.stringify(this.#workouts));
+  }
+  _getLocalStorage() {
+    const data = JSON.parse(localStorage.getItem('workouts'));
+
+    if (!data) return;
+
+    this.#workouts = data;
+
+    this.#workouts.forEach(work => {
+      this._renderWorkout(work);
+    });
+  }
+  reset() {
+    localStorage.removeItem('workouts');
+    location.reload();
   }
 }
 
